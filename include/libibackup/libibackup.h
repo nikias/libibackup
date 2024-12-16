@@ -36,6 +36,8 @@ typedef enum {
     IBACKUP_E_INVALID_ARG = -1,
     IBACKUP_E_PLIST_ERROR = -2,
     IBACKUP_E_DATA_ERROR = -3,
+    IBACKUP_E_OPEN_ERROR = -4,
+    IBACKUP_E_MISSING_PASSWORD = -5,
     IBACKUP_E_UNKNOWN_ERROR = -256
 } libibackup_error_t;
 
@@ -74,13 +76,13 @@ char* libibackup_combine_path(const char* directory, const char* file);
 
 char* libibackup_get_path_for_file_id(libibackup_client_t client, const char* file_id);
 
-libibackup_error_t libibackup_open_backup(const char* path, libibackup_client_t* client);
+libibackup_error_t libibackup_open_backup(const char* path, libibackup_client_t* client, const char* password);
 
 libibackup_error_t libibackup_get_info(libibackup_client_t client, plist_t* info);
 
-libibackup_error_t libibackup_list_domains(libibackup_client_t client, /* of char* */ collection_t *domains);
+libibackup_error_t libibackup_list_domains(libibackup_client_t client, struct collection* domains);
 
-libibackup_error_t libibackup_list_files_for_domain(libibackup_client_t client, const char* domain, /* of libibackup_file_entry_t* */ collection_t *files);
+libibackup_error_t libibackup_list_files_for_domain(libibackup_client_t client, const char* domain, struct collection *files);
 
 libibackup_error_t libibackup_get_file_by_id(libibackup_client_t client, const char* file_id, char** full_path);
 

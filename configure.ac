@@ -18,9 +18,9 @@ dnl libtool versioning
 LIBIBACKUP_SO_VERSION=1:0:1
 
 dnl Minimum package versions
-LIBPLIST_VERSION=2.2.0
+LIBPLIST_VERSION=2.6.0
 SQLITE_VERSION=3.0
-LIMD_GLUE_VERSION=1.1.0
+LIMD_GLUE_VERSION=1.3.0
 
 AC_SUBST(LIBIBACKUP_SO_VERSION)
 AC_SUBST(LIBPLIST_VERSION)
@@ -34,19 +34,10 @@ LT_INIT
 # Checks for libraries.
 PKG_CHECK_MODULES(libplist, libplist-2.0 >= $LIBPLIST_VERSION)
 PKG_CHECK_MODULES(sqlite3, sqlite3 >= $SQLITE_VERSION)
-PKG_CHECK_MODULES(limd_glue, libimobiledevice-glue-1.1 >= $LIMD_GLUE_VERSION)
-
+PKG_CHECK_MODULES(limd_glue, libimobiledevice-glue-1.0 >= $LIMD_GLUE_VERSION)
+PKG_CHECK_MODULES(openssl, openssl >= 1.1.1)
 
 # Checks for header files.
-m4_warn([obsolete],
-[The preprocessor macro `STDC_HEADERS' is obsolete.
-  Except in unusual embedded environments, you can safely include all
-  ISO C90 headers unconditionally.])dnl
-# Autoupdate added the next two lines to ensure that your configure
-# script's behavior did not change.  They are probably safe to remove.
-AC_CHECK_INCLUDES_DEFAULT
-AC_PROG_EGREP
-
 AC_CHECK_HEADERS([stdint.h stdlib.h string.h gcrypt.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
@@ -107,7 +98,7 @@ else
 	building_debug_code=yes
 fi
 
-AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wmissing-declarations -Wredundant-decls -Wshadow -Wpointer-arith -Wwrite-strings -Wswitch-default -Wno-unused-parameter -fsigned-char -fvisibility=hidden")
+AS_COMPILER_FLAGS(GLOBAL_CFLAGS, "-Wall -Wextra -Wmissing-declarations -Wredundant-decls -Wshadow -Wpointer-arith -Wwrite-strings -Wswitch-default -Wno-unused-parameter -fsigned-char -fvisibility=hidden -g -fsanitize=address")
 AC_SUBST(GLOBAL_CFLAGS)
 
 case "$GLOBAL_CFLAGS" in

@@ -35,36 +35,33 @@ void get_file_path(libibackup_client_t client, char* file_id) {
 void list_domains(libibackup_client_t client, bool empty) {
     libibackup_domain_metrics_t metrics;
     printf("Listing Domains\n");
-    collection_t *domains = collection_new();
-    libibackup_list_domains(client, domains);
+    struct collection domains;
+    collection_init(&domains);
+    libibackup_list_domains(client, &domains);
 
-    int64_t index = 0;
-    while (domains->list[index] != NULL) {
-        libibackup_get_domain_metrics(client, domains->list[index], &metrics);
+    FOREACH(char* domain, &domains) {
+        libibackup_get_domain_metrics(client, domain, &metrics);
         if (empty || metrics.file_count != 0) {
-            printf("Domain: %s (%d files, %d directories, %d symlinks)\n", (char*)domains->list[index],
+            printf("Domain: %s (%d files, %d directories, %d symlinks)\n", domain,
                    metrics.file_count, metrics.directory_count, metrics.symlink_count);
         }
 
-        free(domains->list[index]);
-        index++;
-    }
+        free(domain);
+    } ENDFOREACH
 
-    collection_free(domains);
+    collection_free(&domains);
 }
 
 void list_files(libibackup_client_t client, char* domain) {
     printf("Listing files for domain %s\n", domain);
-    collection_t *files = collection_new();
-    libibackup_file_entry_t *file;
+    struct collection files;
     libibackup_file_metadata_t metadata;
 
-    libibackup_list_files_for_domain(client, domain, files);
+    collection_init(&files);
 
-    int64_t index = 0;
-    while (files->list[index] != NULL) {
-        file = (libibackup_file_entry_t*)files->list[index];
+    libibackup_list_files_for_domain(client, domain, &files);
 
+    FOREACH(libibackup_file_entry_t* file, &files) {
         libibackup_get_metadata_by_id(client,file->file_id, &metadata);
         switch (file->type) {
             case IBACKUP_FLAG_FILE:
@@ -80,11 +77,9 @@ void list_files(libibackup_client_t client, char* domain) {
                        file->relative_path, metadata.target);
                 break;
         }
+    } ENDFOREACH
 
-        index++;
-    }
-
-    collection_free_all(files);
+    collection_free(&files);
 }
 
 void remove_file(libibackup_client_t client, char* file_id) {
@@ -107,18 +102,20 @@ void check_files(libibackup_client_t client) {
     char* file_path = malloc(24);
     char* combined_path;
     printf("Checking for broken files\n");
-    collection_t* files;
-    collection_t* domains = collection_new();
-    libibackup_list_domains(client, domains);
+    struct collection files;
+    struct collection domains;
 
-    int64_t domain_index = 0;
-    while (domains->list[domain_index] != NULL) {
-        files = collection_new();
-        libibackup_list_files_for_domain(client, domains->list[domain_index], files);
+    collection_init(&domains);
 
-        int64_t file_index = 0;
-        while (files->list[file_index] != NULL) {
-            combined_path = libibackup_get_path_for_file_id(client, file_path);
+    libibackup_list_domains(client, &domains);
+
+    FOREACH(char* domain, &domains) {
+        collection_init(&files);
+        libibackup_list_files_for_domain(client, domain, &files);
+
+        uint64_t file_index = 0;
+        FOREACH(libibackup_file_entry_t* file, &files) {
+            combined_path = libibackup_get_path_for_file_id(client, file->file_id);
 
             if (stat(combined_path, &file_stat) != 0) {
                 printf("Broken File at path %s", combined_path);
@@ -126,35 +123,31 @@ void check_files(libibackup_client_t client) {
 
             free(combined_path);
             file_index++;
-        }
+        } ENDFOREACH
 
-        printf("Scanned %lld files in domain %s\n", file_index, (char*)domains->list[domain_index]);
+        printf("Scanned %lld files in domain %s\n", file_index, domain);
 
-        collection_free_all(files);
-
-        domain_index++;
-    }
+        collection_free(&files);
+    } ENDFOREACH
     free(file_path);
 
-    collection_free_all(domains);
+    collection_free(&domains);
 }
 
 void list_all_files(libibackup_client_t client) {
-    int64_t domain_index = 0;
-    collection_t *files = collection_new();
+    struct collection files;
     libibackup_file_metadata_t metadata;
-    libibackup_file_entry_t* file;
-    collection_t *domains = collection_new();
-    libibackup_list_domains(client, files);
+    struct collection domains;
 
+    collection_init(&domains);
+    libibackup_list_domains(client, &domains);
 
-    while (domains->list[domain_index] != NULL) {
-        printf("Files in domain %s\n", (char*)domains->list[domain_index]);
-        libibackup_list_files_for_domain(client, domains->list[domain_index], files);
+    FOREACH(char* domain, &domains) {
+        printf("Files in domain %s\n", domain);
+        collection_init(&files);
+        libibackup_list_files_for_domain(client, domain, &files);
 
-        int64_t file_index = 0;
-        while (files->list[file_index] != NULL) {
-            file = (libibackup_file_entry_t*)files->list[file_index];
+        FOREACH(libibackup_file_entry_t* file, &files) {
             if (file->type != IBACKUP_FLAG_DIRECTORY) {
                 libibackup_get_metadata_by_id(client, file->file_id, &metadata);
             }
@@ -172,16 +165,11 @@ void list_all_files(libibackup_client_t client) {
                            file->relative_path, metadata.target);
                     break;
             }
-
-            file_index++;
-        }
-
-        collection_free_all(files);
+        } ENDFOREACH
+        collection_free(&files);
+    } ENDFOREACH
     
-        domain_index++;
-    }
-    
-    collection_free_all(domains);
+    collection_free(&domains);
 }
 
 void get_file(libibackup_client_t client, char* file_id) {
@@ -206,7 +194,7 @@ void get_file(libibackup_client_t client, char* file_id) {
         plist_t data_plist;
         char* xml_plist;
         uint32_t size;
-        plist_from_memory(data, path_stat.st_size, &data_plist);
+        plist_from_memory(data, path_stat.st_size, &data_plist, NULL);
         plist_to_xml(data_plist, &xml_plist, &size);
         write(STDOUT_FILENO, xml_plist, size);
     }
@@ -224,7 +212,10 @@ int main(int argc, char **argv) {
 
     libibackup_client_t client;
 
-    libibackup_open_backup(argv[2], &client);
+    if (libibackup_open_backup(argv[2], &client, "test123") < 0) {
+        printf("Failed to open backup at %s\n", argv[2]);
+        return -1;
+    }
 
     printf("Backup Opened\n");
 
