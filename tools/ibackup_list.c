@@ -118,7 +118,7 @@ void check_files(libibackup_client_t client) {
             combined_path = libibackup_get_path_for_file_id(client, file->file_id);
 
             if (stat(combined_path, &file_stat) != 0) {
-                printf("Broken File at path %s", combined_path);
+                printf("Broken File at path %s\n", combined_path);
             }
 
             free(combined_path);

@@ -382,6 +382,10 @@ static void aes_unwrap(unsigned char* dec_key, unsigned char* wrapped_key, int w
     unsigned char todec[16];
     unsigned char decod[32];
 
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, dec_key, NULL);
+
     for (j = 5; j >= 0; j--) {
         //printf("j = %d\n", j);
         for (i = n; i > 0; i--) {
@@ -392,14 +396,9 @@ static void aes_unwrap(unsigned char* dec_key, unsigned char* wrapped_key, int w
 
             //hexdump(todec, 16);
 
-            EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-            EVP_CIPHER_CTX_set_padding(ctx, 0);
-            EVP_DecryptInit_ex(ctx, EVP_aes_256_ecb(), NULL, dec_key, NULL);
             int todec_len = 16;
-            int decod_len = 16;
+            int decod_len = 0;
             EVP_DecryptUpdate(ctx, decod, &decod_len, todec, todec_len);
-            EVP_DecryptFinal_ex(ctx, decod+decod_len, &decod_len);
-            EVP_CIPHER_CTX_free(ctx);
 
             //hexdump(decod, 16);
 
@@ -407,6 +406,14 @@ static void aes_unwrap(unsigned char* dec_key, unsigned char* wrapped_key, int w
             R[i] = be64toh(*(uint64_t*)(&decod[8]));
         }
     }
+
+    int len = 0;
+    EVP_DecryptFinal_ex(ctx, decod, &len);
+    if (len != 0) {
+        printf("DecryptFinal produced %d extra bytes?\n", len);
+    }
+    EVP_CIPHER_CTX_free(ctx);
+
     if (A != 0xa6a6a6a6a6a6a6a6) {
         printf("None\n");
     }
@@ -478,6 +485,11 @@ static void aes_decrypt_cbc_stream(FILE* fin, FILE* fout, unsigned char* key, in
 
     unsigned char buf[65536];
 
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+    EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
+
+    int len = 0;
     while (!feof(fin)) {
         ssize_t r = fread(buf, 1, 65536, fin);
         ssize_t r_adj = r;
@@ -485,15 +497,16 @@ static void aes_decrypt_cbc_stream(FILE* fin, FILE* fout, unsigned char* key, in
             r_adj = (r / 16) * 16 + 16;
             memset(buf + r, 0, r_adj - r);
         }
-        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-        EVP_CIPHER_CTX_set_padding(ctx, 0);
-        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
-        int len = 0;
+        len = 0;
         EVP_DecryptUpdate(ctx, buf, &len, buf, r_adj);
-        EVP_DecryptFinal_ex(ctx, buf+len, &len);
-        EVP_CIPHER_CTX_free(ctx);
         fwrite(buf, 1, r, fout);
     }
+
+    EVP_DecryptFinal_ex(ctx, buf, &len);
+    if (len != 0) {
+        printf("DecryptFinal produced %d extra bytes?\n", len);
+    }
+    EVP_CIPHER_CTX_free(ctx);
 }
 
 EXPORT libibackup_error_t libibackup_open_backup(const char* path, libibackup_client_t* client, const char* password) {
