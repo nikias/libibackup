@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <plist/plist.h>
 
@@ -95,6 +96,17 @@ void get_file_metadata(libibackup_client_t client, char* file_id) {
     plist_to_xml(metadata, &xml, &length);
 
     printf("Metadata\n%s\n", xml);
+}
+
+void extract_file(libibackup_client_t client, char* file_id, char* out_path)
+{
+    FILE* fout = fopen(out_path, "wb");
+    if (!fout) {
+        printf("Failed to open %s for writing: %s\n", out_path, strerror(errno));
+        return;
+    }
+    libibackup_dump_file_data_to_stream_by_id(client, file_id, fout);
+    fclose(fout);
 }
 
 void check_files(libibackup_client_t client) {
@@ -246,6 +258,9 @@ int main(int argc, char **argv) {
     }
     else if (strcmp(argv[1], "get_file_path") == 0) {
         get_file_path(client, argv[3]);
+    }
+    else if (strcmp(argv[1], "extract_file") == 0) {
+        extract_file(client, argv[3], argv[4]);
     }
     else {
         printf("Unknown command %s\n", argv[1]);

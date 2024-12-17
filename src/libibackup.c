@@ -11,6 +11,7 @@
 #include <plist/plist.h>
 #include <libimobiledevice-glue/sha.h>
 #include <libimobiledevice-glue/collection.h>
+#include <libimobiledevice-glue/nskeyedarchive.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 
@@ -477,7 +478,7 @@ static void unwrap_key_for_class(plist_t keybag_dict, uint32_t protection_class,
     hexdump(key_out, *key_out_len);
 }
 
-static void aes_decrypt_cbc_stream(FILE* fin, FILE* fout, unsigned char* key, int padding)
+static void aes_decrypt_cbc_stream(FILE* fin, FILE* fout, unsigned char* key)
 {
     const unsigned char iv[16] = { 0, };
     fseek(fin, 0, SEEK_SET);
@@ -571,7 +572,7 @@ EXPORT libibackup_error_t libibackup_open_backup(const char* path, libibackup_cl
                     fclose(fin);
                     break;
                 }
-                aes_decrypt_cbc_stream(fin, fout, mani_key, 0);
+                aes_decrypt_cbc_stream(fin, fout, mani_key);
                 fclose(fin);
                 fclose(fout);
                 db_result = sqlite3_open_v2(manifest_database_dec_path, &private_client->manifest, SQLITE_OPEN_READWRITE, NULL);
@@ -691,6 +692,56 @@ EXPORT libibackup_error_t libibackup_get_metadata_by_id(libibackup_client_t clie
     plist_free(objects);
 
     plist_free(raw_metadata);
+
+    return IBACKUP_E_SUCCESS;
+}
+
+EXPORT libibackup_error_t libibackup_dump_file_data_to_stream_by_id(libibackup_client_t client, const char* file_id, FILE* stream)
+{
+    plist_t file_meta_raw = NULL;
+    libibackup_error_t err = libibackup_get_raw_metadata_by_id(client, file_id, &file_meta_raw);
+    if (err != 0) {
+        return err;
+    }
+    nskeyedarchive_t file_meta = nskeyedarchive_new_from_plist(file_meta_raw);
+    plist_t objects = nskeyedarchive_get_objects(file_meta);
+    if (!objects) {
+        return IBACKUP_E_PLIST_ERROR;
+    }
+    plist_t attribs = plist_array_get_item(objects, 1);
+    if (!attribs) {
+        return IBACKUP_E_PLIST_ERROR;
+    }
+
+    char* path = libibackup_get_path_for_file_id(client, file_id);
+    FILE* fin = fopen(path, "rb");
+
+    plist_t p_ekuid = plist_dict_get_item(attribs, "EncryptionKey");
+    if (p_ekuid) {
+        uint64_t uid_enckey = 0;
+        plist_get_uid_val(p_ekuid, &uid_enckey);
+        plist_t p_enc_key = NULL;
+        nskeyedarchive_get_class_property(file_meta, uid_enckey, "NS.data", &p_enc_key);
+        if (p_enc_key) {
+            uint64_t key_len = 0;
+            unsigned char* key = (unsigned char*)plist_get_data_ptr(p_enc_key, &key_len);
+            uint32_t key_class = le32toh(*(uint32_t*)key);
+            key += 4;
+            key_len -= 4;
+            unsigned char dec_key[32];
+            int dec_key_len = 0;
+            unwrap_key_for_class(client->keybag_dict, key_class, key, key_len, dec_key, &dec_key_len);
+            aes_decrypt_cbc_stream(fin, stream, dec_key);
+        }
+    } else {
+        char buf[65536];
+        while (!feof(fin)) {
+            ssize_t r = fread(buf, 1, sizeof(buf), fin);
+            fwrite(buf, 1, r, stream);
+        }
+    }
+    fclose(fin);
+    nskeyedarchive_free(file_meta);
 
     return IBACKUP_E_SUCCESS;
 }

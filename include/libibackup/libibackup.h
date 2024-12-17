@@ -86,6 +86,8 @@ libibackup_error_t libibackup_list_files_for_domain(libibackup_client_t client, 
 
 libibackup_error_t libibackup_get_file_by_id(libibackup_client_t client, const char* file_id, char** full_path);
 
+libibackup_error_t libibackup_dump_file_data_to_stream_by_id(libibackup_client_t client, const char* file_id, FILE* stream);
+
 libibackup_error_t libibackup_remove_file_by_id(libibackup_client_t client, const char* file_id);
 
 libibackup_error_t libibackup_get_raw_metadata_by_id(libibackup_client_t client, const char* file_id, plist_t* metadata);
